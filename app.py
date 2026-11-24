@@ -1,8 +1,8 @@
+import pandas as pd
 import streamlit as st
 st.title("វត្តមាន")
 sheet_url = "https://docs.google.com/spreadsheets/d/1a_JSto3zLs_LGue6SfJyukmdPaw18XQ9eoWY4VeH_nE/edit?usp=sharing"
 try:
-	import pandas as pd
 	df = pd.read_csv(csv_url)
 	st.dataframe(df)
 except Exception as e:
