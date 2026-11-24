@@ -3,6 +3,7 @@ import streamlit as st
 st.title("វត្តមាន")
 sheet_url = "https://docs.google.com/spreadsheets/d/1a_JSto3zLs_LGue6SfJyukmdPaw18XQ9eoWY4VeH_nE/edit?usp=sharing"
 csv_url = sheet_url.replace("/edit?usp=sharing", "/export?format=csv")
+month = st.selectbox("ជ្រើសរើសខែ", [ទិន្នន័យច្បាប់​"])
 try:
 	df = pd.read_csv(csv_url)
 	st.dataframe(df)
