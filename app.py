@@ -7,8 +7,6 @@ month = st.selectbox("ជ្រើសរើសឈ្មោះ", ["ឡុង វ�
 try:
 	df = pd.read_csv(csv_url)
 	st.dataframe(df)
-	import csv
-    employees = {}
         for row in csv.DictReader(f):
             emp_id = row["id"].strip()
             employees[emp_id] = {
