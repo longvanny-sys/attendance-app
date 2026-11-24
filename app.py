@@ -9,7 +9,6 @@ try:
 	st.dataframe(df)
 	import csv
     employees = {}
-    with csv_path.open(mode="r", encoding="utf-8", newline="") as f:
         for row in csv.DictReader(f):
             emp_id = row["id"].strip()
             employees[emp_id] = {
