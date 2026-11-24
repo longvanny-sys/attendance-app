@@ -1,6 +1,6 @@
 import streamlit as st
 st.title("វត្តមាន")
-sheet_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRQITfz4x1jmCOH3208JmRmQj92ZkfbIYjiU48wFfsVf4P__3RDZynz-KimXM530RvsYqfJ3TzUnhLz/pubhtml?gid=2089000004&single=true" 
+sheet_url = "https://docs.google.com/spreadsheets/d/1a_JSto3zLs_LGue6SfJyukmdPaw18XQ9eoWY4VeH_nE/edit?gid=1512199347#gid=1512199347" 
 csv_url = sheet_url.replace("/edit#gid=", "/export?format=csv&gid=")
 try:
 	import pandas as pd
