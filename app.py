@@ -7,38 +7,7 @@ month = st.selectbox("ជ្រើសរើសឈ្មោះ", ["ឡុង វ�
 try:
 	df = pd.read_csv(csv_url)
 	st.dataframe(df)
-        for row in csv.DictReader(f):
-            emp_id = row["id"].strip()
-            employees[emp_id] = {
-                "id": emp_id,
-                "name": row["name"].strip(),
-                "gender": row["gender"].strip(),
-                "position": row["position"].strip(),
-                "quotas": {
-                    "P": int(row["annual_quota_p"]),
-                    "S": int(row["short_quota_s"]),
-                    "SL": int(row["sick_quota_sl"]),
-                },
-                "used": {"P": 0, "S": 0, "SL": 0},
-                "nf": 0,
-            }
     return employees
-
-
-def apply_logs(employees: dict[str, dict], logs_path: Path) -> dict[str, dict]:
-    with logs_path.open(mode="r", encoding="utf-8", newline="") as f:
-        for row in csv.DictReader(f):
-            emp_id = row["employee_id"].strip()
-            ltype = row["leave_type"].strip()
-            days = int(row["days"])
-            nf = int(row.get("nf_count", 0) or 0)
-
-            if emp_id in employees and ltype in employees[emp_id]["used"]:
-                employees[emp_id]["used"][ltype] += days
-                employees[emp_id]["nf"] += nf
-    return employees
-
-
 def get_employee_summary(emp: dict) -> dict:
     remaining = {
         k: emp["quotas"][k] - emp["used"][k]
