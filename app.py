@@ -8,9 +8,6 @@ try:
 	df = pd.read_csv(csv_url)
 	st.dataframe(df)
 	import csv
-from pathlib import Path
-
-
 def load_employees(csv_path: Path) -> dict[str, dict]:
     employees = {}
     with csv_path.open(mode="r", encoding="utf-8", newline="") as f:
