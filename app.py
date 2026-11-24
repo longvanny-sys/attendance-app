@@ -7,6 +7,5 @@ month = st.selectbox("ជ្រើសរើសឈ្មោះ", ["ឡុង វ�
 try:
 	df = pd.read_csv(csv_url)
 	st.dataframe(df)
-    print(get_employee_summary(emps["1"]))
 except Exception as e:
 	st.error(f"មានបញ្ហាទាញទិន្នន័យ៖ {e}")
