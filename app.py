@@ -22,10 +22,9 @@ if "Name" in df.columns:
 		name_value = df.loc[0, "Name"]
 name_value = df.at[0, "Name"]
 	result = df.loc[df["Name"] == "ឡុង វណ្ណនី", "Status"].values[0]
-st.write("Status:", result)
+st.write("Status", result)
         st.dataframe(filtered_df)
     else:
         st.warning("រកមិនឃើញជួរឈរ 'Name' នៅក្នុង Sheet ទេ។")
 except Exception as e:
 	st.error(f"មានបញ្ហាទាញទិន្នន័យ៖ {e}")
-st.write("You selected:", option)
