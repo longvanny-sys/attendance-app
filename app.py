@@ -6,6 +6,8 @@ csv_url = sheet_url.replace("/edit?usp=sharing", "/export?format=csv")
 month = st.selectbox("ជ្រើសរើសឈ្មោះ", ["ឡុង វណ្ណនី", "ឈន ធារ៉ា", "ហែម ណារ៉ា"])
 try:
     df = pd.read_csv(csv_url)
+	value = df.iloc[0, 0]
+	value = df.iloc[2, 1]
 cell_value = df.loc[0, "Name"]
 st.write("តម្លៃក្នុង Cell:", cell_value)
     st.subheader("ទិន្នន័យទាំងអស់")
