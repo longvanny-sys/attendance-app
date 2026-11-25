@@ -1,3 +1,5 @@
+import re
+import textwrap
 import pandas as pd
 import streamlit as st
 
@@ -5,514 +7,846 @@ st.set_page_config(page_title="បញ្ជីវត្តមានសរុប�
 
 st.title("តារាងបញ្ជីវត្តមានសរុបប្រចាំឆ្នាំ២០២៦ សាខា ប.ស.ស. ខេត្តពោធិ៍សាត់")
 
-csv_url = "https://docs.google.com/spreadsheets/d/1a_JSto3zLs_LGue6SfJyukmdPaw18XQ9eoWY4VeH_nE/export?format=csv&gid=2089000004"
+SPREADSHEET_ID = "1a_JSto3zLs_LGue6SfJyukmdPaw18XQ9eoWY4VeH_nE"
+SUMMARY_GID = "2089000004"
+csv_url = (
+    f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}"
+    f"/export?format=csv&gid={SUMMARY_GID}"
+)
+
+# កំណត់ index ជួរឈរ (ចាប់ផ្តើមពី 0) សម្រាប់ "ច្បាប់..." នៅខាងលើនៃ Card
+QUOTA_COLS = {
+    "P": 5,
+    "S": 7,
+    "SL": 9,
+}
+
+# ប្រសិនបើចង់បង្ខំ index ជួរឈរសម្រាប់ "នៅសល់" ផ្ទាល់ អាចកំណត់លេខជួរឈរ (0, 1, 2...)
+# ប្រសិនបើដាក់ None កម្មវិធីនឹងស្វែងរកជួរឈរដែលមានពាក្យ "នៅសល់" ដោយស្វ័យប្រវត្តិ
+MANUAL_REMAINING_COLS = {
+    "P": 6,
+    "S": 8,
+    "SL": 10,
+}
+
+# កំណត់បញ្ជីខែ និង gid នៃ Sheet ខែនីមួយៗ (4-26 ដល់ 3-27)
+MONTH_SHEETS = [
+    {"label": "មេសា ២០២៦", "sheet": "4-26", "gid": "1974334752"},
+    {"label": "ឧសភា ២០២៦", "sheet": "5-26", "gid": "1765643733"},
+    {"label": "មិថុនា ២០២៦", "sheet": "6-26", "gid": "709324239"},
+    {"label": "កក្កដា ២០២៦", "sheet": "7-26", "gid": "558720548"},
+    {"label": "សីហា ២០២៦", "sheet": "8-26", "gid": "1537765030"},
+    {"label": "កញ្ញា ២០២៦", "sheet": "9-26", "gid": "1812889418"},
+    {"label": "តុលា ២០២៦", "sheet": "10-26", "gid": "309255693"},
+    {"label": "វិច្ឆិកា ២០២៦", "sheet": "11-26", "gid": "1707699913"},
+    {"label": "ធ្នូ ២០២៦", "sheet": "12-26", "gid": "485167717"},
+    {"label": "មករា ២០២៧", "sheet": "1-27", "gid": "1361878427"},
+    {"label": "កុម្ភៈ ២០២៧", "sheet": "2-27", "gid": "1002610773"},
+    {"label": "មីនា ២០២៧", "sheet": "3-27", "gid": "1749336699"},
+]
+
+# អក្សរសម្គាល់ដែលត្រូវរាប់ (ប្រើ Nf តែមួយមុខ)
+TARGET_CODES = ["P", "S", "SL", "Nf", "ML", "V", "X", "កបន"]
 
 KHMER_DIGITS = str.maketrans("0123456789", "០១២៣៤៥៦៧៨៩")
+ARABIC_DIGITS = str.maketrans("០១២៣៤៥៦៧៨៩", "0123456789")
+
+
+def strip_invisible(text: str) -> str:
+    """លុបអក្សរលាក់ ដូចជា U+200B ដែលបង្កបញ្ហាពេល Copy/Paste"""
+    return re.sub(r"[\u200b-\u200f\ufeff]", "", str(text))
 
 
 def to_khmer_num(val_str: str) -> str:
     """ប្តូរលេខអារ៉ាប់ទៅជាលេខខ្មែរ"""
-    return str(val_str).translate(KHMER_DIGITS)
+    return strip_invisible(val_str).translate(KHMER_DIGITS)
+
+
+def format_count_val(val: float) -> str:
+    """បំប្លែងចំនួនរាប់ (ចំនួនគត់ ឬ ទសភាគ) ទៅជាលេខខ្មែរ"""
+    if abs(val - round(val)) < 1e-9:
+        return to_khmer_num(str(int(round(val))))
+    formatted = f"{val:.2f}".rstrip("0").rstrip(".")
+    return to_khmer_num(formatted)
 
 
 def format_pel_value(raw_val, default_zero: bool = True) -> str:
     """បំប្លែងតម្លៃទៅជាទម្រង់លេខខ្មែរ + ពេល (ដូចជា ១៨ ពេល ឬ ០០ ពេល)"""
     if pd.isna(raw_val):
         return "០០ ពេល" if default_zero else "-"
-    s = str(raw_val).strip()
-    if s == "" or s.lower() == "nan":
+    s = strip_invisible(raw_val).strip()
+    if s == "" or s.lower() in ("nan", "none"):
         return "០០ ពេល" if default_zero else "-"
     if s in ("-", "–", "—"):
         return "-"
 
-    # ប្រសិនបើជាលេខគត់ ឬទសភាគ ដូចជា "18" ឬ "18.0"
+    s_ascii = s.translate(ARABIC_DIGITS)
     try:
-        num = float(s)
+        num = float(s_ascii)
         if num.is_integer():
             n_int = int(num)
-            # រក្សា 00 ជា ០០ ពេល ឬលេខធម្មតាជាលេខខ្មែរ
-            if n_int == 0 and s.startswith("00"):
+            if n_int == 0 and s_ascii.startswith("00"):
                 return "០០ ពេល"
             return f"{to_khmer_num(str(n_int))} ពេល"
-        return f"{to_khmer_num(s)} ពេល"
+        return f"{to_khmer_num(s_ascii)} ពេល"
     except ValueError:
-        # ប្រសិនបើមានវង់ក្រចកដូចជា (8) ឬអក្សរផ្សេង
         cleaned = to_khmer_num(s)
         if "ពេល" not in cleaned:
             return f"{cleaned} ពេល"
         return cleaned
 
 
-def render_employee_leave_card(row_series: pd.Series):
-    """បង្ហាញ Card សង្ខេប ៣ ជួរ ជាលេខខ្មែរ + ពេល និងបង្រួមសម្រាប់ទូរស័ព្ទ"""
+def detect_remaining_columns(df: pd.DataFrame) -> dict:
+    """ស្វែងរក index ជួរឈរដែលមានពាក្យ 'នៅសល់' សម្រាប់ P, S, SL"""
+    detected = {"P": None, "S": None, "SL": None}
+    if df.empty:
+        return detected
+
+    header_rows = df.iloc[: min(6, len(df))]
+    col_labels = {}
+
+    for col_idx in range(df.shape[1]):
+        texts = []
+        for _, r_val in header_rows.iloc[:, col_idx].items():
+            if pd.notna(r_val):
+                t = strip_invisible(r_val).strip()
+                if t and t.lower() not in ("none", "nan"):
+                    texts.append(t)
+        col_labels[col_idx] = " ".join(texts)
+
+    for col_idx, label_text in col_labels.items():
+        if "នៅសល់" not in label_text:
+            continue
+        low = label_text.lower()
+        if detected["P"] is None and ("(p)" in low or "ប្រចាំឆ្នាំ" in label_text):
+            detected["P"] = col_idx
+        elif detected["S"] is None and ("(s)" in low or "រយៈពេលខ្លី" in label_text):
+            detected["S"] = col_idx
+        elif detected["SL"] is None and ("(sl)" in low or "ឈឺ" in label_text):
+            detected["SL"] = col_idx
+
+    rem_cols = [idx for idx, txt in col_labels.items() if "នៅសល់" in txt]
+    codes_order = ["P", "S", "SL"]
+    for pos, code in enumerate(codes_order):
+        if detected[code] is None and pos < len(rem_cols):
+            detected[code] = rem_cols[pos]
+
+    return detected
+
+
+def get_remaining_val_from_summary(
+    row_series: pd.Series, code: str, detected_cols: dict
+) -> str:
+    """ទាញតម្លៃច្បាប់នៅសល់ផ្ទាល់ពី Sheet សង្ខេប"""
+    manual_idx = MANUAL_REMAINING_COLS.get(code)
+    col_idx = manual_idx if manual_idx is not None else detected_cols.get(code)
+
+    if col_idx is not None and col_idx < len(row_series):
+        return format_pel_value(row_series.iloc[col_idx], default_zero=False)
+
+    fallback_map = {"P": 6, "S": 8, "SL": 10}
+    fb_idx = fallback_map.get(code)
+    if fb_idx is not None and fb_idx < len(row_series):
+        return format_pel_value(row_series.iloc[fb_idx], default_zero=False)
+
+    return "-"
+
+
+@st.cache_data(ttl=120)
+def load_csv_cached(url: str):
+    try:
+        df = pd.read_csv(url, header=None)
+        return df, None
+    except Exception as exc:
+        return pd.DataFrame(), str(exc)
+
+
+@st.cache_data(ttl=120)
+def load_month_sheet_by_gid(spreadsheet_id: str, gid: str):
+    clean_gid = strip_invisible(gid).strip()
+    if not clean_gid:
+        return pd.DataFrame(), "មិនទាន់បានបំពេញ gid"
+    month_url = (
+        f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}"
+        f"/export?format=csv&gid={clean_gid}"
+    )
+    try:
+        df = pd.read_csv(month_url, header=None)
+        return df, None
+    except Exception as exc:
+        return pd.DataFrame(), str(exc)
+
+
+def normalize_name(name_str: str) -> str:
+    """សម្អាតអក្សរលាក់ ដកឃ្លាស្ទួន និងដកឃ្លាក្បាល/កន្ទុយ"""
+    cleaned = strip_invisible(name_str)
+    return " ".join(cleaned.strip().split())
+
+
+def parse_token_weight(tok: str):
+    """ទាញយក (ឈ្មោះកូដ, ចំនួន) ពី token ដូចជា P, 0.5P, 1/2SL, កបន"""
+    tok_clean = strip_invisible(tok).strip().translate(ARABIC_DIGITS)
+    if not tok_clean:
+        return None
+
+    upper_map = {
+        "P": "P",
+        "S": "S",
+        "SL": "SL",
+        "NF": "Nf",
+        "ML": "ML",
+        "V": "V",
+        "X": "X",
+        "កបន": "កបន",
+    }
+
+    if tok_clean in TARGET_CODES:
+        return tok_clean, 1.0
+    if tok_clean.upper() in upper_map:
+        return upper_map[tok_clean.upper()], 1.0
+
+    match = re.fullmatch(
+        r"^(?:(\d+(?:\.\d+)?)|(\d+)/(\d+))?\s*([A-Za-z]+|កបន)$",
+        tok_clean,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return None
+
+    dec_part, num_part, den_part, code_part = match.groups()
+    mapped_code = upper_map.get(code_part.upper()) or upper_map.get(code_part)
+    if not mapped_code:
+        return None
+
+    weight = 1.0
+    if dec_part is not None:
+        weight = float(dec_part)
+    elif num_part is not None and den_part is not None and float(den_part) != 0:
+        weight = float(num_part) / float(den_part)
+
+    return mapped_code, weight
+
+
+def count_employee_month_codes(month_df: pd.DataFrame, emp_name: str):
+    """ស្វែងរកជួរដេករបស់បុគ្គលិកក្នុង Sheet ខែ ហើយរាប់ចំនួនអក្សរសម្គាល់"""
+    counts = {code: 0.0 for code in TARGET_CODES}
+    if month_df.empty or not emp_name:
+        return counts, 0
+
+    target_norm = normalize_name(emp_name)
+    matched_indices = []
+
+    for idx, row in month_df.iterrows():
+        row_norms = [
+            normalize_name(v)
+            for v in row.tolist()
+            if pd.notna(v) and normalize_name(v) != ""
+        ]
+        if target_norm in row_norms:
+            matched_indices.append(idx)
+
+    if not matched_indices:
+        return counts, 0
+
+    for r_idx in matched_indices:
+        row_vals = month_df.iloc[r_idx].tolist()
+        for cell in row_vals:
+            if pd.isna(cell):
+                continue
+            cell_str = normalize_name(cell)
+            if not cell_str or cell_str.lower() == "nan":
+                continue
+
+            if cell_str == target_norm:
+                continue
+
+            tokens = [
+                t.strip()
+                for t in re.split(r"[/,;+\s]+", cell_str)
+                if t.strip()
+            ]
+            for tok in tokens:
+                parsed = parse_token_weight(tok)
+                if parsed:
+                    code_key, weight = parsed
+                    counts[code_key] += weight
+
+    return counts, len(matched_indices)
+
+
+def compute_monthly_totals(emp_name: str, month_sheets: list, spreadsheet_id: str):
+    """គណនាទិន្នន័យប្រចាំខែ និងផលបូកសរុបប្រចាំឆ្នាំ"""
+    monthly_records = []
+    totals = {code: 0.0 for code in TARGET_CODES}
+    debug_rows = []
+
+    for m in month_sheets:
+        month_label = m.get("label", "")
+        sheet_name = m.get("sheet", "")
+        gid = m.get("gid", "")
+        m_df, m_err = load_month_sheet_by_gid(spreadsheet_id, gid)
+        c, match_count = count_employee_month_codes(m_df, emp_name)
+
+        for k in TARGET_CODES:
+            totals[k] += c[k]
+
+        monthly_records.append({"label": month_label, "counts": c})
+        debug_rows.append(
+            {
+                "ខែ": month_label,
+                "Sheet": sheet_name,
+                "gid": gid if gid else "(ទទេ)",
+                "ស្ថានភាពទាញ": "ជោគជ័យ" if not m_df.empty else (m_err or "ទទេ"),
+                "ជួរផ្គូផ្គងឈ្មោះ": match_count,
+            }
+        )
+
+    return monthly_records, totals, debug_rows
+
+
+def render_monthly_breakdown_table(monthly_records: list, totals: dict, debug_rows: list):
+    """បង្ហាញតារាងសរុបប្រចាំខែតាមអក្សរសម្គាល់ ដែលបង្រួមចូលស្អាត និង ខែ ធំជាងគេ"""
+    rows_list = []
+
+    for item in monthly_records:
+        month_label = item["label"]
+        c = item["counts"]
+
+        def cell_disp(val: float) -> str:
+            return "" if val <= 0 else format_count_val(val)
+
+        row_html = (
+            "<tr>"
+            f'<td class="mb-month">{month_label}</td>'
+            f'<td class="mb-num">{cell_disp(c["P"])}</td>'
+            f'<td class="mb-num">{cell_disp(c["S"])}</td>'
+            f'<td class="mb-num">{cell_disp(c["SL"])}</td>'
+            f'<td class="mb-num">{cell_disp(c["Nf"])}</td>'
+            f'<td class="mb-num">{cell_disp(c["ML"])}</td>'
+            f'<td class="mb-num">{cell_disp(c["V"])}</td>'
+            f'<td class="mb-num">{cell_disp(c["X"])}</td>'
+            f'<td class="mb-num">{cell_disp(c["កបន"])}</td>'
+            "</tr>"
+        )
+        rows_list.append(row_html)
+
+    total_html = (
+        '<tr class="mb-total-row">'
+        '<td class="mb-month">សរុប</td>'
+        f'<td class="mb-num">{format_count_val(totals["P"]) if totals["P"] > 0 else "-"}</td>'
+        f'<td class="mb-num">{format_count_val(totals["S"]) if totals["S"] > 0 else "-"}</td>'
+        f'<td class="mb-num">{format_count_val(totals["SL"]) if totals["SL"] > 0 else "-"}</td>'
+        f'<td class="mb-num">{format_count_val(totals["Nf"]) if totals["Nf"] > 0 else "-"}</td>'
+        f'<td class="mb-num">{format_count_val(totals["ML"]) if totals["ML"] > 0 else "-"}</td>'
+        f'<td class="mb-num">{format_count_val(totals["V"]) if totals["V"] > 0 else "-"}</td>'
+        f'<td class="mb-num">{format_count_val(totals["X"]) if totals["X"] > 0 else "-"}</td>'
+        f'<td class="mb-num">{format_count_val(totals["កបន"]) if totals["កបន"] > 0 else "-"}</td>'
+        "</tr>"
+    )
+    rows_list.append(total_html)
+
+    table_html = textwrap.dedent(f"""
+    <style>
+    .mb-wrap {{
+      width: 100%;
+      max-width: 760px;
+      overflow-x: auto;
+      margin-top: 8px;
+      margin-bottom: 16px;
+    }}
+    table.mb-table {{
+      border-collapse: collapse;
+      table-layout: fixed;
+      width: 100%;
+      min-width: 620px;
+      font-family: "Khmer OS Battambang", "Noto Sans Khmer", Arial, sans-serif;
+      font-size: 11.5px;
+      border: 1.5px solid #1f2328;
+      background: #ffffff;
+    }}
+    col.mb-col-month {{ width: 22%; }}
+    col.mb-col-main  {{ width: 12.5%; }}
+    col.mb-col-other {{ width: 8.1%; }}
+
+    table.mb-table th, table.mb-table td {{
+      border: 1px solid #444444;
+      padding: 4px 3px;
+      text-align: center;
+      vertical-align: middle;
+      line-height: 1.3;
+      word-break: normal;
+      overflow-wrap: normal;
+    }}
+    table.mb-table th.mb-th-month,
+    table.mb-table td.mb-month,
+    table.mb-table th.mb-th-p,
+    table.mb-table th.mb-th-s,
+    table.mb-table th.mb-th-sl {{
+      white-space: nowrap;
+      font-size: 11px;
+      padding: 4px 3px;
+    }}
+    .mb-th-month {{
+      background-color: #d9d9d9 !important;
+      color: #000000 !important;
+      font-weight: 700;
+    }}
+    .mb-th-p {{ background-color: #009944 !important; color: #000000 !important; font-weight: 700; }}
+    .mb-th-s {{ background-color: #ffcc00 !important; color: #000000 !important; font-weight: 700; }}
+    .mb-th-sl {{ background-color: #e67300 !important; color: #000000 !important; font-weight: 700; }}
+    .mb-th-nf {{ background-color: #00b050 !important; color: #ffff00 !important; font-weight: 700; }}
+    .mb-th-ml {{ background-color: #e6b8b7 !important; color: #000000 !important; font-weight: 700; }}
+    .mb-th-v {{ background-color: #00b0f0 !important; color: #000000 !important; font-weight: 700; }}
+    .mb-th-x {{ background-color: #31869b !important; color: #ffffff !important; font-weight: 700; }}
+    .mb-th-kbn {{ background-color: #ff0000 !important; color: #ffff00 !important; font-weight: 700; }}
+    td.mb-month {{
+      background-color: #d9d9d9 !important;
+      color: #000000 !important;
+      font-weight: 700;
+    }}
+    td.mb-num {{
+      background-color: #ffffff !important;
+      color: #111111 !important;
+      font-weight: 600;
+      height: 26px;
+    }}
+    tr.mb-total-row td {{
+      background-color: #f3f6fa !important;
+      font-weight: 700;
+      border-top: 2px solid #1f2328;
+    }}
+    </style>
+    <div class="mb-wrap">
+    <table class="mb-table">
+    <colgroup>
+      <col class="mb-col-month">
+      <col class="mb-col-main">
+      <col class="mb-col-main">
+      <col class="mb-col-main">
+      <col class="mb-col-other">
+      <col class="mb-col-other">
+      <col class="mb-col-other">
+      <col class="mb-col-other">
+      <col class="mb-col-other">
+    </colgroup>
+    <thead>
+    <tr>
+    <th class="mb-th-month">ខែ</th>
+    <th class="mb-th-p">ប្រចាំឆ្នាំ (P)</th>
+    <th class="mb-th-s">រយៈពេលខ្លី (S)</th>
+    <th class="mb-th-sl">ឈឺ (SL)</th>
+    <th class="mb-th-nf">Nf</th>
+    <th class="mb-th-ml">ML</th>
+    <th class="mb-th-v">V</th>
+    <th class="mb-th-x">X</th>
+    <th class="mb-th-kbn">កបន</th>
+    </tr>
+    </thead>
+    <tbody>
+    {"".join(rows_list)}
+    </tbody>
+    </table>
+    </div>
+    """).strip()
+
+    st.markdown(table_html, unsafe_allow_html=True)
+
+    with st.expander("ពិនិត្យស្ថានភាពទាញទិន្នន័យតាមខែ (Debug)"):
+        st.dataframe(pd.DataFrame(debug_rows), use_container_width=True)
+
+
+def render_employee_leave_card(row_series: pd.Series, detected_cols: dict):
+    """បង្ហាញ Card សង្ខេប និងទាញច្បាប់នៅសល់ផ្ទាល់ពី Sheet សង្ខេប"""
+
     def clean_text(idx, default="-"):
         if idx >= len(row_series):
             return default
         val = row_series.iloc[idx]
         if pd.isna(val):
             return default
-        s = str(val).strip()
-        return default if s == "" or s.lower() == "nan" else to_khmer_num(s)
+        s = strip_invisible(val).strip()
+        return default if s == "" or s.lower() in ("nan", "none") else to_khmer_num(s)
 
+    def clean_pel(idx, default_zero=False):
+        if idx is None or idx >= len(row_series):
+            return "០០ ពេល" if default_zero else "-"
+        return format_pel_value(row_series.iloc[idx], default_zero=default_zero)
+
+    emp_id = clean_text(1, "-")
     emp_name = clean_text(2, "-")
     emp_gender = clean_text(3, "-")
     emp_role = clean_text(4, "-")
 
-    p_used = format_pel_value(row_series.iloc[5] if len(row_series) > 5 else "", default_zero=False)
-    p_rem = format_pel_value(row_series.iloc[6] if len(row_series) > 6 else "", default_zero=True)
-    s_used = format_pel_value(row_series.iloc[7] if len(row_series) > 7 else "", default_zero=False)
-    s_rem = format_pel_value(row_series.iloc[8] if len(row_series) > 8 else "", default_zero=True)
-    sl_used = format_pel_value(row_series.iloc[9] if len(row_series) > 9 else "", default_zero=False)
-    sl_rem = format_pel_value(row_series.iloc[10] if len(row_series) > 10 else "", default_zero=True)
+    leave_p = clean_pel(QUOTA_COLS.get("P"), default_zero=False)
+    leave_s = clean_pel(QUOTA_COLS.get("S"), default_zero=False)
+    leave_sl = clean_pel(QUOTA_COLS.get("SL"), default_zero=False)
 
-    card_html = f"""
+    rem_p = get_remaining_val_from_summary(row_series, "P", detected_cols)
+    rem_s = get_remaining_val_from_summary(row_series, "S", detected_cols)
+    rem_sl = get_remaining_val_from_summary(row_series, "SL", detected_cols)
+
+    card_html = textwrap.dedent(f"""
     <style>
-      .leave-card-wrap {{
-        width: 100%;
-        max-width: 780px;
-        overflow-x: auto;
-        margin-top: 6px;
-        margin-bottom: 12px;
-      }}
-      table.leave-card {{
-        border-collapse: collapse;
-        width: 100%;
-        min-width: 540px;
-        font-family: "Khmer OS Battambang", "Noto Sans Khmer", Arial, sans-serif;
-        font-size: 14px;
-        border: 1.5px solid #1f2328;
-        background: #ffffff;
-      }}
-      table.leave-card th, table.leave-card td {{
-        border: 1px solid #333333;
-        padding: 6px 8px;
-        text-align: center;
-        vertical-align: middle;
-        line-height: 1.25;
-      }}
-      .lc-name {{
-        background-color: #ffff00 !important;
-        color: #4a148c !important;
-        font-weight: 700;
-        font-size: 15px;
-      }}
-      .lc-gender {{
-        background-color: #f8cba6 !important;
-        color: #1f2328 !important;
-        font-weight: 700;
-      }}
-      .lc-role {{
-        background-color: #f8cba6 !important;
-        color: #1f2328 !important;
-        font-weight: 700;
-      }}
-      .lc-p {{
-        background-color: #009944 !important;
-        color: #000000 !important;
-        font-weight: 700;
-      }}
-      .lc-s {{
-        background-color: #ffcc00 !important;
-        color: #000000 !important;
-        font-weight: 700;
-      }}
-      .lc-sl {{
-        background-color: #e67300 !important;
-        color: #000000 !important;
-        font-weight: 700;
-      }}
-      .lc-label {{
-        background-color: #ffffff !important;
-        color: #111111 !important;
-        font-weight: 700;
-        text-align: right !important;
-        padding-right: 12px !important;
-      }}
-      .lc-num {{
-        background-color: #ffffff !important;
-        color: #4a2c82 !important;
-        font-weight: 700;
-        white-space: nowrap;
-      }}
-
-      /* បង្រួមសម្រាប់អេក្រង់ទូរស័ព្ទ (max-width: 600px) */
-      @media (max-width: 600px) {{
-        table.leave-card {{
-          min-width: 100%;
-          font-size: 11px;
-        }}
-        table.leave-card th, table.leave-card td {{
-          padding: 4px 3px;
-        }}
-        .lc-name {{
-          font-size: 11.5px;
-        }}
-        .lc-label {{
-          padding-right: 6px !important;
-          font-size: 10.5px;
-        }}
-        .lc-num {{
-          font-size: 10.5px;
-        }}
-      }}
+    .emp-card {{
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin: 10px 0 14px 0;
+      background-color: #f8fafc;
+      max-width: 760px;
+      font-family: "Khmer OS Battambang", "Noto Sans Khmer", Arial, sans-serif;
+      color: #0f172a;
+    }}
+    .emp-card-title {{
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }}
+    .emp-card-sub {{
+      font-size: 13.5px;
+      color: #334155;
+      margin-bottom: 10px;
+    }}
+    .emp-card-stats {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }}
+    .emp-stat-box {{
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 8px 12px;
+      min-width: 155px;
+    }}
+    .emp-stat-label {{
+      font-size: 12px;
+      color: #64748b;
+    }}
+    .emp-stat-val {{
+      font-size: 15px;
+      font-weight: 700;
+      color: #0f172a;
+    }}
+    .emp-stat-rem {{
+      font-size: 13px;
+      font-weight: 700;
+      color: #0f766e;
+      margin-top: 4px;
+    }}
     </style>
-    <div class="leave-card-wrap">
-      <table class="leave-card">
-        <thead>
-          <tr>
-            <th colspan="2" class="lc-name">{emp_name}</th>
-            <th class="lc-gender">{emp_gender}</th>
-            <th class="lc-role">{emp_role}</th>
-            <th class="lc-p">ប្រចាំឆ្នាំ (P)</th>
-            <th class="lc-s">រយៈពេលខ្លី (S)</th>
-            <th class="lc-sl">ឈឺ (SL)</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td colspan="4" class="lc-label">ចំនួនថ្ងៃបានប្រើប្រាស់</td>
-            <td class="lc-num">{p_used}</td>
-            <td class="lc-num">{s_used}</td>
-            <td class="lc-num">{sl_used}</td>
-          </tr>
-          <tr>
-            <td colspan="4" class="lc-label">ចំនួនថ្ងៃនៅសល់</td>
-            <td class="lc-num">{p_rem}</td>
-            <td class="lc-num">{s_rem}</td>
-            <td class="lc-num">{sl_rem}</td>
-          </tr>
-        </tbody>
-      </table>
+    <div class="emp-card">
+    <div class="emp-card-title">ឈ្មោះ៖ {emp_name} ({emp_gender}) — អត្តលេខ៖ {emp_id}</div>
+    <div class="emp-card-sub">តួនាទី៖ {emp_role}</div>
+    <div class="emp-card-stats">
+    <div class="emp-stat-box">
+    <div class="emp-stat-label">ច្បាប់ប្រចាំឆ្នាំ (P)</div>
+    <div class="emp-stat-val">{leave_p}</div>
+    <div class="emp-stat-rem">នៅសល់៖ {rem_p}</div>
     </div>
-    """
+    <div class="emp-stat-box">
+    <div class="emp-stat-label">ច្បាប់រយៈពេលខ្លី (S)</div>
+    <div class="emp-stat-val">{leave_s}</div>
+    <div class="emp-stat-rem">នៅសល់៖ {rem_s}</div>
+    </div>
+    <div class="emp-stat-box">
+    <div class="emp-stat-label">ច្បាប់ឈឺ (SL)</div>
+    <div class="emp-stat-val">{leave_sl}</div>
+    <div class="emp-stat-rem">នៅសល់៖ {rem_sl}</div>
+    </div>
+    </div>
+    </div>
+    """).strip()
+
     st.markdown(card_html, unsafe_allow_html=True)
 
 
-def render_sheet_like_table(raw_df: pd.DataFrame, max_height: str = "460px"):
-    """បង្ហាញតារាងទាំងអស់ជាទម្រង់ស្រដៀង Google Sheet និងបង្រួមសម្រាប់ទូរស័ព្ទ"""
-    top_row = raw_df.iloc[2].fillna("").astype(str).str.strip().tolist() if len(raw_df) > 2 else []
-    sub_row = raw_df.iloc[3].fillna("").astype(str).str.strip().tolist() if len(raw_df) > 3 else []
-    body_df = raw_df.iloc[4:].dropna(how="all").reset_index(drop=True)
-    num_cols = body_df.shape[1]
+def render_summary_overview_table(summary_df: pd.DataFrame):
+    """បង្ហាញតារាង Sheet សង្ខេបទាំងមូល សមល្មមក្នុងទំព័រ និងមិនធ្លាក់អក្សរ"""
+    if summary_df.empty:
+        st.info("គ្មានទិន្នន័យក្នុង Sheet សង្ខេបទេ។")
+        return
 
-    top_row = (top_row + [""] * num_cols)[:num_cols]
-    sub_row = (sub_row + [""] * num_cols)[:num_cols]
+    rows_html = []
 
-    col_classes = {}
-    for idx in range(num_cols):
-        t_clean = "" if "Unnamed" in top_row[idx] else top_row[idx]
-        b_clean = "" if "Unnamed" in sub_row[idx] else sub_row[idx]
-        combined = f"{t_clean} {b_clean}".strip()
+    for _, row in summary_df.iterrows():
+        vals = [
+            ""
+            if pd.isna(v) or strip_invisible(v).strip().lower() in ("", "none", "nan")
+            else strip_invisible(v).strip()
+            for v in row.tolist()
+        ]
 
-        if "ល.រ" in combined or idx == 1:
-            col_classes[idx] = "gs-col-tiny"
-        elif "ល.ស" in combined or idx == 0:
-            col_classes[idx] = "gs-col-tiny"
-        elif "ភេទ" in combined or idx == 3:
-            col_classes[idx] = "gs-col-small"
-        elif "គោត្តនាម" in combined or idx == 2:
-            col_classes[idx] = "gs-col-name"
-        elif "ឋានៈ" in combined or idx == 4:
-            col_classes[idx] = "gs-col-role"
-        else:
-            col_classes[idx] = "gs-col-compact"
-
-    th_row1_html = []
-    th_row2_html = []
-
-    i = 0
-    while i < num_cols:
-        t_val = "" if "Unnamed" in top_row[i] else top_row[i]
-        b_val = "" if "Unnamed" in sub_row[i] else sub_row[i]
-
-        if t_val and (i + 1 < num_cols) and (top_row[i + 1] == t_val or str(top_row[i + 1]).startswith("Unnamed")):
-            span = 1
-            j = i + 1
-            while j < num_cols:
-                next_t = top_row[j]
-                next_b = "" if "Unnamed" in sub_row[j] else sub_row[j]
-                if next_t == t_val or (str(next_t).startswith("Unnamed") and next_b in ("បានប្រើ", "នៅសល់", "")):
-                    span += 1
-                    j += 1
-                else:
-                    break
-
-            if span > 1:
-                th_row1_html.append(f'<th colspan="{span}" class="gs-group-compact">{t_val}</th>')
-                for k in range(i, i + span):
-                    sub_label = "" if "Unnamed" in sub_row[k] else sub_row[k]
-                    c_cls = col_classes.get(k, "gs-col-compact")
-                    th_row2_html.append(f'<th class="{c_cls}">{sub_label}</th>')
-                i += span
-                continue
-
-        label = t_val or b_val or f"Col {i+1}"
-        c_cls = col_classes.get(i, "gs-col-compact")
-        th_row1_html.append(f'<th rowspan="2" class="{c_cls}">{label}</th>')
-        i += 1
-
-    body_rows_html = []
-    for _, row in body_df.iterrows():
-        vals = [("" if pd.isna(v) or str(v).strip().lower() == "nan" else str(v).strip()) for v in row.tolist()]
-        non_empty = [v for v in vals if v != ""]
-        if not non_empty:
+        if all(x == "" for x in vals):
             continue
 
-        first_non_empty = non_empty[0]
+        c0 = vals[0] if len(vals) > 0 else ""
+        c1 = vals[1] if len(vals) > 1 else ""
+        c2 = vals[2] if len(vals) > 2 else ""
+        c3 = vals[3] if len(vals) > 3 else ""
+        c4 = vals[4] if len(vals) > 4 else ""
+        c5 = vals[5] if len(vals) > 5 else ""
+        c6 = vals[6] if len(vals) > 6 else ""
+        c7 = vals[7] if len(vals) > 7 else ""
+        c8 = vals[8] if len(vals) > 8 else ""
+        c9 = vals[9] if len(vals) > 9 else ""
+        c10 = vals[10] if len(vals) > 10 else ""
+
+        header_check = " ".join([c1, c2, c3, c4, c5, c6, c7, c8, c9, c10])
+        if any(
+            k in header_check
+            for k in (
+                "គោត្តនាម",
+                "បានប្រើ",
+                "នៅសល់",
+                "ច្បាប់ប្រចាំ",
+                "ច្បាប់រយៈ",
+                "ច្បាប់ឈឺ",
+            )
+        ):
+            continue
+
+        section_text = c0 or c2
         is_section_row = (
-            first_non_empty.startswith(("I.", "II.", "III.", "IV.", "V."))
-            and len(non_empty) <= 2
+            section_text.startswith(("I.", "II.", "III.", "IV.", "V.", "១.", "២."))
+            and not c3
+            and not c4
+            and not c5
+            and not c6
         )
 
         if is_section_row:
-            body_rows_html.append(
-                f'<tr class="gs-section-row"><td colspan="{num_cols}">{to_khmer_num(first_non_empty)}</td></tr>'
+            rows_html.append(
+                f'<tr class="ov-section-row">'
+                f'<td class="ov-sec-title" colspan="11">{to_khmer_num(section_text)}</td>'
+                f"</tr>"
             )
-        else:
-            tds = []
-            for idx, val in enumerate(vals):
-                val_kh = to_khmer_num(val)
-                c_cls = col_classes.get(idx, "gs-col-compact")
-                if c_cls in ("gs-col-tiny", "gs-col-small", "gs-col-compact"):
-                    tds.append(f'<td class="{c_cls} gs-center">{val_kh}</td>')
-                else:
-                    tds.append(f'<td class="{c_cls} gs-left">{val_kh}</td>')
-            body_rows_html.append(f'<tr>{"".join(tds)}</tr>')
+            continue
 
-    html = f"""
-    <style>
-      .gs-wrapper {{
-        max-height: {max_height};
-        overflow: auto;
-        border: 1px solid #c7ccd1;
-        border-radius: 4px;
-        background: #ffffff;
-        font-family: "Khmer OS Battambang", "Noto Sans Khmer", Arial, sans-serif;
-        font-size: 12.5px;
-      }}
-      table.gs-table {{
-        border-collapse: collapse;
-        width: auto;
-        table-layout: fixed;
-        color: #1f2328;
-      }}
-      table.gs-table th, table.gs-table td {{
-        border: 1px solid #d0d7de;
-        padding: 4px 5px;
-        vertical-align: middle;
-        overflow-wrap: anywhere;
-        word-break: break-word;
-      }}
-      table.gs-table thead th {{
-        position: sticky;
-        background-color: #eef3f8;
-        font-weight: 700;
-        text-align: center;
-        white-space: normal;
-        line-height: 1.25;
-        z-index: 2;
-      }}
-      table.gs-table thead tr:nth-child(1) th {{
-        top: 0;
-        background-color: #e2ebf5;
-      }}
-      table.gs-table thead tr:nth-child(2) th {{
-        top: 30px;
-        background-color: #f1f5f9;
-      }}
-      table.gs-table th.gs-col-tiny, table.gs-table td.gs-col-tiny {{
-        width: 38px;
-        min-width: 38px;
-        max-width: 44px;
-        padding-left: 2px;
-        padding-right: 2px;
-      }}
-      table.gs-table th.gs-col-small, table.gs-table td.gs-col-small {{
-        width: 48px;
-        min-width: 48px;
-        max-width: 56px;
-        padding-left: 2px;
-        padding-right: 2px;
-      }}
-      table.gs-table th.gs-col-compact, table.gs-table td.gs-col-compact {{
-        width: 58px;
-        min-width: 58px;
-        max-width: 70px;
-        padding-left: 2px;
-        padding-right: 2px;
-      }}
-      table.gs-table th.gs-col-name, table.gs-table td.gs-col-name {{
-        width: 125px;
-        min-width: 125px;
-        max-width: 150px;
-        white-space: nowrap;
-      }}
-      table.gs-table th.gs-col-role, table.gs-table td.gs-col-role {{
-        width: 145px;
-        min-width: 145px;
-        max-width: 175px;
-        white-space: normal;
-        line-height: 1.25;
-      }}
-      table.gs-table td.gs-center {{
-        text-align: center;
-      }}
-      table.gs-table td.gs-left {{
-        text-align: left;
-      }}
-      table.gs-table tr:hover td {{
-        background-color: #f8fafc;
-      }}
-      table.gs-table tr.gs-section-row td {{
-        background-color: #e8eef5;
-        font-weight: 700;
-        color: #0f172a;
-        text-align: left;
-        padding: 6px 8px;
-        white-space: normal;
-      }}
+        if not c2:
+            continue
 
-      /* បង្រួមតារាងទាំងមូលលើទូរស័ព្ទ */
-      @media (max-width: 600px) {{
-        .gs-wrapper {{
-          font-size: 11px;
-        }}
-        table.gs-table th.gs-col-tiny, table.gs-table td.gs-col-tiny {{
-          width: 30px;
-          min-width: 30px;
-        }}
-        table.gs-table th.gs-col-small, table.gs-table td.gs-col-small {{
-          width: 40px;
-          min-width: 40px;
-        }}
-        table.gs-table th.gs-col-compact, table.gs-table td.gs-col-compact {{
-          width: 48px;
-          min-width: 48px;
-        }}
-        table.gs-table th.gs-col-name, table.gs-table td.gs-col-name {{
-          width: 105px;
-          min-width: 105px;
-        }}
-        table.gs-table th.gs-col-role, table.gs-table td.gs-col-role {{
-          width: 115px;
-          min-width: 115px;
-        }}
-      }}
-    </style>
-    <div class="gs-wrapper">
-      <table class="gs-table">
-        <thead>
-          <tr>{"".join(th_row1_html)}</tr>
-          <tr>{"".join(th_row2_html)}</tr>
-        </thead>
-        <tbody>
-          {"".join(body_rows_html)}
-        </tbody>
-      </table>
-    </div>
-    """
-    st.markdown(html, unsafe_allow_html=True)
+        def fmt_cell(val_str: str, dash_when_empty: bool = False) -> str:
+            if not val_str:
+                return "-" if dash_when_empty else ""
+            if val_str in ("-", "–", "—"):
+                return "-"
+            return to_khmer_num(val_str)
 
-
-# បង្រួម padding ទំព័រ Streamlit លើទូរស័ព្ទ និងកំណត់ selectbox ឱ្យល្មម
-st.markdown(
-    """
-    <style>
-      div[data-testid="stSelectbox"] {
-        max-width: 280px;
-      }
-      @media (max-width: 600px) {
-        .block-container {
-          padding-top: 2rem !important;
-          padding-left: 0.75rem !important;
-          padding-right: 0.75rem !important;
-        }
-        h1 {
-          font-size: 1.35rem !important;
-          line-height: 1.35 !important;
-        }
-        h2 {
-          font-size: 1.1rem !important;
-        }
-        div[data-testid="stSelectbox"] {
-          max-width: 100%;
-        }
-      }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-
-try:
-    raw_df = pd.read_csv(csv_url, header=None)
-
-    df = pd.read_csv(csv_url, header=[2, 3])
-    merged_cols = []
-    last_group = ""
-    for i, (top, bottom) in enumerate(df.columns):
-        t = "" if "Unnamed" in str(top) else str(top).strip()
-        b = "" if "Unnamed" in str(bottom) else str(bottom).strip()
-        if t:
-            last_group = t
-        if t and b and t != b:
-            col_name = f"{t} - {b}"
-        elif b in ("បានប្រើ", "នៅសល់") and last_group:
-            col_name = f"{last_group} - {b}"
-        else:
-            col_name = b or t
-        merged_cols.append(col_name or f"ជួរឈរ {i+1}")
-
-    seen = {}
-    unique_cols = []
-    for col in merged_cols:
-        if col in seen:
-            seen[col] += 1
-            unique_cols.append(f"{col} ({seen[col]})")
-        else:
-            seen[col] = 1
-            unique_cols.append(col)
-    df.columns = unique_cols
-    df = df.dropna(how="all").reset_index(drop=True)
-
-    name_col = next((c for c in ["គោត្តនាម-នាម", "ឈ្មោះ", "Name"] if c in df.columns), None)
-
-    st.subheader("លទ្ធផលតាមឈ្មោះ")
-
-    if name_col:
-        names = (
-            df[name_col]
-            .dropna()
-            .astype(str)
-            .str.strip()
-            .replace("", pd.NA)
-            .dropna()
-            .unique()
-            .tolist()
+        rows_html.append(
+            "<tr>"
+            f'<td class="ov-center">{fmt_cell(c0)}</td>'
+            f'<td class="ov-center">{fmt_cell(c1)}</td>'
+            f'<td class="ov-left ov-bold">{fmt_cell(c2)}</td>'
+            f'<td class="ov-center">{fmt_cell(c3)}</td>'
+            f'<td class="ov-left">{fmt_cell(c4)}</td>'
+            f'<td class="ov-num ov-p">{fmt_cell(c5, dash_when_empty=True)}</td>'
+            f'<td class="ov-num ov-p-rem">{fmt_cell(c6, dash_when_empty=True)}</td>'
+            f'<td class="ov-num ov-s">{fmt_cell(c7, dash_when_empty=True)}</td>'
+            f'<td class="ov-num ov-s-rem">{fmt_cell(c8, dash_when_empty=True)}</td>'
+            f'<td class="ov-num ov-sl">{fmt_cell(c9, dash_when_empty=True)}</td>'
+            f'<td class="ov-num ov-sl-rem">{fmt_cell(c10, dash_when_empty=True)}</td>'
+            "</tr>"
         )
-        names = [n for n in names if not n.startswith(("I.", "II.", "III.", "IV.", "V."))]
 
-        if names:
-            col_pick, _ = st.columns([1.2, 2.8])
-            with col_pick:
-                selected_name = st.selectbox("ជ្រើសរើសឈ្មោះ", names)
+    overview_html = textwrap.dedent(f"""
+    <style>
+    .ov-wrap {{
+      width: 100%;
+      overflow-x: auto;
+      margin-top: 6px;
+      margin-bottom: 12px;
+      border: 1.5px solid #1f2328;
+      border-radius: 6px;
+      background: #ffffff;
+    }}
+    table.ov-table {{
+      border-collapse: collapse;
+      table-layout: fixed;
+      width: 100%;
+      min-width: 680px;
+      font-family: "Khmer OS Battambang", "Noto Sans Khmer", Arial, sans-serif;
+      font-size: 11px;
+      background: #ffffff;
+      word-break: normal;
+      overflow-wrap: break-word;
+    }}
+    table.ov-table th, table.ov-table td {{
+      border: 1px solid #4b5563;
+      padding: 3px 3px;
+      vertical-align: middle;
+      line-height: 1.35;
+    }}
+    .ov-col-no {{ width: 4%; }}
+    .ov-col-lr {{ width: 4%; }}
+    .ov-col-name {{ width: 13%; }}
+    .ov-col-gen {{ width: 5%; }}
+    .ov-col-role {{ width: 25%; }}
+    .ov-col-num {{ width: 8%; }}
 
-            matched_raw_rows = raw_df[
-                raw_df.apply(lambda r: selected_name in [str(x).strip() for x in r.values], axis=1)
-            ]
+    .ov-th-gray {{
+      background-color: #d9d9d9 !important;
+      color: #000000 !important;
+      font-weight: 700;
+      text-align: center;
+    }}
+    .ov-th-p {{
+      background-color: #009944 !important;
+      color: #000000 !important;
+      font-weight: 700;
+      text-align: center;
+    }}
+    .ov-th-s {{
+      background-color: #ffcc00 !important;
+      color: #000000 !important;
+      font-weight: 700;
+      text-align: center;
+    }}
+    .ov-th-sl {{
+      background-color: #e67300 !important;
+      color: #000000 !important;
+      font-weight: 700;
+      text-align: center;
+    }}
+    .ov-th-sub-p {{
+      background-color: #16a34a !important;
+      color: #ffffff !important;
+      font-weight: 700;
+      text-align: center;
+      font-size: 10px;
+    }}
+    .ov-th-sub-s {{
+      background-color: #eab308 !important;
+      color: #000000 !important;
+      font-weight: 700;
+      text-align: center;
+      font-size: 10px;
+    }}
+    .ov-th-sub-sl {{
+      background-color: #ea580c !important;
+      color: #ffffff !important;
+      font-weight: 700;
+      text-align: center;
+      font-size: 10px;
+    }}
+    tr.ov-section-row td.ov-sec-title {{
+      background-color: #e5e7eb !important;
+      color: #111827 !important;
+      font-weight: 700;
+      text-align: left;
+      padding: 4px 6px;
+      font-size: 11px;
+    }}
+    td.ov-center {{
+      text-align: center;
+      color: #111111;
+      background-color: #ffffff;
+    }}
+    td.ov-left {{
+      text-align: left;
+      color: #111111;
+      background-color: #ffffff;
+    }}
+    td.ov-bold {{
+      font-weight: 700;
+    }}
+    td.ov-num {{
+      text-align: center;
+      font-weight: 600;
+    }}
+    td.ov-p {{ background-color: #16a34a !important; color: #ffffff !important; }}
+    td.ov-p-rem {{ background-color: #15803d !important; color: #ffffff !important; }}
+    td.ov-s {{ background-color: #facc15 !important; color: #111827 !important; }}
+    td.ov-s-rem {{ background-color: #eab308 !important; color: #111827 !important; }}
+    td.ov-sl {{ background-color: #f97316 !important; color: #ffffff !important; }}
+    td.ov-sl-rem {{ background-color: #ea580c !important; color: #ffffff !important; }}
+    </style>
+    <div class="ov-wrap">
+    <table class="ov-table">
+    <colgroup>
+      <col class="ov-col-no">
+      <col class="ov-col-lr">
+      <col class="ov-col-name">
+      <col class="ov-col-gen">
+      <col class="ov-col-role">
+      <col class="ov-col-num">
+      <col class="ov-col-num">
+      <col class="ov-col-num">
+      <col class="ov-col-num">
+      <col class="ov-col-num">
+      <col class="ov-col-num">
+    </colgroup>
+    <thead>
+    <tr>
+      <th class="ov-th-gray" rowspan="2">ល.ស</th>
+      <th class="ov-th-gray" rowspan="2">ល.រ</th>
+      <th class="ov-th-gray" rowspan="2">គោត្តនាម-នាម</th>
+      <th class="ov-th-gray" rowspan="2">ភេទ</th>
+      <th class="ov-th-gray" rowspan="2">ឋានៈ</th>
+      <th class="ov-th-p" colspan="2">P</th>
+      <th class="ov-th-s" colspan="2">S</th>
+      <th class="ov-th-sl" colspan="2">SL</th>
+    </tr>
+    <tr>
+      <th class="ov-th-sub-p">បានប្រើ</th>
+      <th class="ov-th-sub-p">នៅសល់</th>
+      <th class="ov-th-sub-s">បានប្រើ</th>
+      <th class="ov-th-sub-s">នៅសល់</th>
+      <th class="ov-th-sub-sl">បានប្រើ</th>
+      <th class="ov-th-sub-sl">នៅសល់</th>
+    </tr>
+    </thead>
+    <tbody>
+    {"".join(rows_html)}
+    </tbody>
+    </table>
+    </div>
+    """).strip()
 
-            if not matched_raw_rows.empty:
-                render_employee_leave_card(matched_raw_rows.iloc[0])
-        else:
-            st.info("មិនមានឈ្មោះបុគ្គលិកសម្រាប់បង្ហាញទេ។")
+    st.markdown(overview_html, unsafe_allow_html=True)
+
+
+# --- ផ្នែកបង្ហាញទិន្នន័យសំខាន់ (Main UI) ---
+summary_df, load_err = load_csv_cached(csv_url)
+
+if load_err:
+    err_msg = (
+        "មិនអាចទាញទិន្នន័យពី Google Sheet បានទេ។ សូមពិនិត្យមើលថា Google Sheet "
+        "បានកំណត់ Share ជា **Anyone with the link (Viewer)** ឬនៅ។\n\n"
+        f"ព័ត៌មានលម្អិត៖ `{load_err}`"
+    )
+    st.error(err_msg)
+elif summary_df.empty:
+    st.warning("Sheet សង្ខេបទទេ (គ្មានទិន្នន័យ)។")
+else:
+    detected_rem_cols = detect_remaining_columns(summary_df)
+    name_col_idx = 2 if summary_df.shape[1] > 2 else 0
+    raw_names = [
+        normalize_name(v)
+        for v in summary_df.iloc[:, name_col_idx].dropna().tolist()
+        if normalize_name(v) != ""
+    ]
+    emp_names = list(dict.fromkeys(raw_names))
+
+    if not emp_names:
+        st.info("រកមិនឃើញបញ្ជីឈ្មោះបុគ្គលិកក្នុងជួរឈរទី ៣ ទេ — កំពុងបង្ហាញតារាងដើម៖")
+        st.dataframe(summary_df, use_container_width=True)
     else:
-        st.warning("រកមិនឃើញជួរឈរឈ្មោះនៅក្នុង Sheet ទេ។")
+        selected_emp = st.selectbox("ជ្រើសរើសឈ្មោះបុគ្គលិក", emp_names)
 
-    st.divider()
+        matched_rows = summary_df[
+            summary_df.iloc[:, name_col_idx].fillna("").map(normalize_name)
+            == selected_emp
+        ]
 
-    st.subheader("ទិន្នន័យទាំងអស់")
-    st.write(f"ចំនួនជួរដេកសរុប (Total rows): {to_khmer_num(str(len(df)))}")
-    render_sheet_like_table(raw_df, max_height="500px")
+        monthly_records, totals, debug_rows = compute_monthly_totals(
+            selected_emp, MONTH_SHEETS, SPREADSHEET_ID
+        )
 
-except Exception as e:
-    st.error(f"មានបញ្ហាទាញទិន្នន័យ៖ {e}")
+        if not matched_rows.empty:
+            render_employee_leave_card(matched_rows.iloc[0], detected_rem_cols)
+
+        render_monthly_breakdown_table(monthly_records, totals, debug_rows)
+
+        with st.expander("មើលទិន្នន័យ Sheet សង្ខេបទាំងមូល"):
+            render_summary_overview_table(summary_df)
