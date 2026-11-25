@@ -9,3 +9,11 @@ try:
 	st.dataframe(df)
 except Exception as e:
 	st.error(f"មានបញ្ហាទាញទិន្នន័យ៖ {e}")
+import streamlit as st
+option = st.selectbox(
+    "How would you like to be contacted?",
+    ("Email", "Home phone", "Mobile phone"),
+)
+
+st.write("You selected:", option)
+
