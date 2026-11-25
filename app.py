@@ -52,6 +52,55 @@ KHMER_DIGITS = str.maketrans("0123456789", "០១២៣៤៥៦៧៨៩")
 ARABIC_DIGITS = str.maketrans("០១២៣៤៥៦៧៨៩", "0123456789")
 
 
+def get_expected_credentials():
+    """ទាញ Username និង Password ពី secrets.toml ឬប្រើតម្លៃបម្រុង"""
+    try:
+        auth_cfg = st.secrets.get("auth", {})
+        user_val = str(auth_cfg.get("username", "admin")).strip()
+        pass_val = str(auth_cfg.get("password", "123456")).strip()
+        return user_val, pass_val
+    except Exception:
+        return "admin", "123456"
+
+
+def render_login_lock_box():
+    """បង្ហាញប្រអប់ Login ចាក់សោចាប់ពីតារាងប្រចាំខែចុះក្រោម"""
+    if "logged_in" not in st.session_state:
+        st.session_state["logged_in"] = False
+    if "logged_user" not in st.session_state:
+        st.session_state["logged_user"] = ""
+
+    if st.session_state["logged_in"]:
+        col_info, col_btn = st.columns([4, 1])
+        with col_info:
+            st.success(f"បានចូលប្រើប្រាស់ក្នុងនាម៖ **{st.session_state['logged_user']}**")
+        with col_btn:
+            if st.button("ចាកចេញ (Logout)", use_container_width=True):
+                st.session_state["logged_in"] = False
+                st.session_state["logged_user"] = ""
+                st.rerun()
+        return True
+
+    st.info("🔒 ចាប់ពីតារាងប្រចាំខែចុះក្រោមត្រូវបានចាក់សោ។ សូមបញ្ចូលគណនីដើម្បីបង្ហាញ។")
+
+    expected_user, expected_pass = get_expected_credentials()
+
+    with st.form("login_lock_form", clear_on_submit=False):
+        input_user = st.text_input("ឈ្មោះអ្នកប្រើប្រាស់ (Username)")
+        input_pass = st.text_input("ពាក្យសម្ងាត់ (Password)", type="password")
+        submitted = st.form_submit_button("ចូលប្រើប្រាស់ (Login)")
+
+        if submitted:
+            if input_user.strip() == expected_user and input_pass == expected_pass:
+                st.session_state["logged_in"] = True
+                st.session_state["logged_user"] = input_user.strip()
+                st.rerun()
+            else:
+                st.error("ឈ្មោះអ្នកប្រើប្រាស់ ឬពាក្យសម្ងាត់មិនត្រឹមត្រូវទេ។")
+
+    return False
+
+
 def strip_invisible(text: str) -> str:
     """លុបអក្សរលាក់ ដូចជា U+200B ដែលបង្កបញ្ហាពេល Copy/Paste"""
     return re.sub(r"[\u200b-\u200f\ufeff]", "", str(text))
@@ -949,14 +998,17 @@ else:
             == selected_emp
         ]
 
-        monthly_records, totals, debug_rows = compute_monthly_totals(
-            selected_emp, MONTH_SHEETS, SPREADSHEET_ID
-        )
-
+        # បង្ហាញ Card សង្ខេបភ្លាមៗដោយមិនជាប់សោ
         if not matched_rows.empty:
             render_employee_leave_card(matched_rows.iloc[0], detected_rem_cols)
 
-        render_monthly_breakdown_table(monthly_records, totals, debug_rows)
+        # ចាក់សោចាប់ពីតារាងប្រចាំខែចុះក្រោមរហូតដល់ Login ជោគជ័យ
+        if render_login_lock_box():
+            monthly_records, totals, debug_rows = compute_monthly_totals(
+                selected_emp, MONTH_SHEETS, SPREADSHEET_ID
+            )
 
-        with st.expander("មើលទិន្នន័យ Sheet សង្ខេបទាំងមូល"):
-            render_summary_overview_table(summary_df)
+            render_monthly_breakdown_table(monthly_records, totals, debug_rows)
+
+            with st.expander("មើលទិន្នន័យ Sheet សង្ខេបទាំងមូល"):
+                render_summary_overview_table(summary_df)
