@@ -13,7 +13,12 @@ try:
             "Unnamed: 2": "Name",
             "Unnamed: 3": "Gender",
             "Unnamed: 4": "Position",
-            "Unnamed: 5": "ច្បាប់ប្រចាំឆ្នាំ",
+            "Unnamed: 5": "ច្បាប់ប្រចាំឆ្នាំ(P)",
+            "Unnamed: 6": "",
+            "Unnamed: 7": "ច្បច្បាប់រយះពេលខ្លី(S)",
+            "Unnamed: 8": "",
+            "Unnamed: 9": "ច្បាប់ឈឺ(SL)",
+            "Unnamed: 10": "",
         }
     )
     
