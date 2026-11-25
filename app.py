@@ -7,133 +7,189 @@ st.title("តារាងបញ្ជីវត្តមានសរុបប្�
 
 csv_url = "https://docs.google.com/spreadsheets/d/1a_JSto3zLs_LGue6SfJyukmdPaw18XQ9eoWY4VeH_nE/export?format=csv&gid=2089000004"
 
+KHMER_DIGITS = str.maketrans("0123456789", "០១២៣៤៥៦៧៨៩")
+
+
+def to_khmer_num(val_str: str) -> str:
+    """ប្តូរលេខអារ៉ាប់ទៅជាលេខខ្មែរ"""
+    return str(val_str).translate(KHMER_DIGITS)
+
+
+def format_pel_value(raw_val, default_zero: bool = True) -> str:
+    """បំប្លែងតម្លៃទៅជាទម្រង់លេខខ្មែរ + ពេល (ដូចជា ១៨ ពេល ឬ ០០ ពេល)"""
+    if pd.isna(raw_val):
+        return "០០ ពេល" if default_zero else "-"
+    s = str(raw_val).strip()
+    if s == "" or s.lower() == "nan":
+        return "០០ ពេល" if default_zero else "-"
+    if s in ("-", "–", "—"):
+        return "-"
+
+    # ប្រសិនបើជាលេខគត់ ឬទសភាគ ដូចជា "18" ឬ "18.0"
+    try:
+        num = float(s)
+        if num.is_integer():
+            n_int = int(num)
+            # រក្សា 00 ជា ០០ ពេល ឬលេខធម្មតាជាលេខខ្មែរ
+            if n_int == 0 and s.startswith("00"):
+                return "០០ ពេល"
+            return f"{to_khmer_num(str(n_int))} ពេល"
+        return f"{to_khmer_num(s)} ពេល"
+    except ValueError:
+        # ប្រសិនបើមានវង់ក្រចកដូចជា (8) ឬអក្សរផ្សេង
+        cleaned = to_khmer_num(s)
+        if "ពេល" not in cleaned:
+            return f"{cleaned} ពេល"
+        return cleaned
+
 
 def render_employee_leave_card(row_series: pd.Series):
-    """បង្ហាញ Card សង្ខេប ៣ ជួរដូចរូបគំរូ"""
-    def clean_cell(idx, default=""):
+    """បង្ហាញ Card សង្ខេប ៣ ជួរ ជាលេខខ្មែរ + ពេល និងបង្រួមសម្រាប់ទូរស័ព្ទ"""
+    def clean_text(idx, default="-"):
         if idx >= len(row_series):
             return default
         val = row_series.iloc[idx]
         if pd.isna(val):
             return default
         s = str(val).strip()
-        return default if s == "" or s.lower() == "nan" else s
+        return default if s == "" or s.lower() == "nan" else to_khmer_num(s)
 
-    # តាមលំដាប់ Column ក្នុង Sheet:
-    # 0: ល.ស, 1: ល.រ, 2: គោត្តនាម-នាម, 3: ភេទ, 4: ឋានៈ
-    # 5: P បានប្រើ, 6: P នៅសល់, 7: S បានប្រើ, 8: S នៅសល់, 9: SL បានប្រើ, 10: SL នៅសល់
-    emp_name = clean_cell(2, "-")
-    emp_gender = clean_cell(3, "-")
-    emp_role = clean_cell(4, "-")
+    emp_name = clean_text(2, "-")
+    emp_gender = clean_text(3, "-")
+    emp_role = clean_text(4, "-")
 
-    p_used = clean_cell(5, "00")
-    p_rem = clean_cell(6, "00")
-    s_used = clean_cell(7, "00")
-    s_rem = clean_cell(8, "00")
-    sl_used = clean_cell(9, "00")
-    sl_rem = clean_cell(10, "00")
+    p_used = format_pel_value(row_series.iloc[5] if len(row_series) > 5 else "", default_zero=False)
+    p_rem = format_pel_value(row_series.iloc[6] if len(row_series) > 6 else "", default_zero=True)
+    s_used = format_pel_value(row_series.iloc[7] if len(row_series) > 7 else "", default_zero=False)
+    s_rem = format_pel_value(row_series.iloc[8] if len(row_series) > 8 else "", default_zero=True)
+    sl_used = format_pel_value(row_series.iloc[9] if len(row_series) > 9 else "", default_zero=False)
+    sl_rem = format_pel_value(row_series.iloc[10] if len(row_series) > 10 else "", default_zero=True)
 
     card_html = f"""
     <style>
+      .leave-card-wrap {{
+        width: 100%;
+        max-width: 780px;
+        overflow-x: auto;
+        margin-top: 6px;
+        margin-bottom: 12px;
+      }}
       table.leave-card {{
         border-collapse: collapse;
         width: 100%;
-        max-width: 820px;
-        margin-top: 8px;
-        margin-bottom: 12px;
+        min-width: 540px;
         font-family: "Khmer OS Battambang", "Noto Sans Khmer", Arial, sans-serif;
-        font-size: 15px;
-        border: 2px solid #1f2328;
+        font-size: 14px;
+        border: 1.5px solid #1f2328;
         background: #ffffff;
       }}
       table.leave-card th, table.leave-card td {{
         border: 1px solid #333333;
-        padding: 7px 12px;
+        padding: 6px 8px;
         text-align: center;
         vertical-align: middle;
+        line-height: 1.25;
       }}
       .lc-name {{
         background-color: #ffff00 !important;
         color: #4a148c !important;
         font-weight: 700;
-        font-size: 16px;
-        min-width: 150px;
+        font-size: 15px;
       }}
       .lc-gender {{
         background-color: #f8cba6 !important;
         color: #1f2328 !important;
         font-weight: 700;
-        width: 75px;
       }}
       .lc-role {{
         background-color: #f8cba6 !important;
         color: #1f2328 !important;
         font-weight: 700;
-        min-width: 180px;
       }}
       .lc-p {{
         background-color: #009944 !important;
         color: #000000 !important;
         font-weight: 700;
-        min-width: 120px;
       }}
       .lc-s {{
         background-color: #ffcc00 !important;
         color: #000000 !important;
         font-weight: 700;
-        min-width: 120px;
       }}
       .lc-sl {{
         background-color: #e67300 !important;
         color: #000000 !important;
         font-weight: 700;
-        min-width: 120px;
       }}
       .lc-label {{
         background-color: #ffffff !important;
         color: #111111 !important;
         font-weight: 700;
         text-align: right !important;
-        padding-right: 18px !important;
+        padding-right: 12px !important;
       }}
       .lc-num {{
         background-color: #ffffff !important;
         color: #4a2c82 !important;
         font-weight: 700;
+        white-space: nowrap;
+      }}
+
+      /* បង្រួមសម្រាប់អេក្រង់ទូរស័ព្ទ (max-width: 600px) */
+      @media (max-width: 600px) {{
+        table.leave-card {{
+          min-width: 100%;
+          font-size: 11px;
+        }}
+        table.leave-card th, table.leave-card td {{
+          padding: 4px 3px;
+        }}
+        .lc-name {{
+          font-size: 11.5px;
+        }}
+        .lc-label {{
+          padding-right: 6px !important;
+          font-size: 10.5px;
+        }}
+        .lc-num {{
+          font-size: 10.5px;
+        }}
       }}
     </style>
-    <table class="leave-card">
-      <thead>
-        <tr>
-          <th colspan="2" class="lc-name">{emp_name}</th>
-          <th class="lc-gender">{emp_gender}</th>
-          <th class="lc-role">{emp_role}</th>
-          <th class="lc-p">ប្រចាំឆ្នាំ (P)</th>
-          <th class="lc-s">រយៈពេលខ្លី (S)</th>
-          <th class="lc-sl">ឈឺ (SL)</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td colspan="4" class="lc-label">ចំនួនថ្ងៃបានប្រើប្រាស់</td>
-          <td class="lc-num">{p_used}</td>
-          <td class="lc-num">{s_used}</td>
-          <td class="lc-num">{sl_used}</td>
-        </tr>
-        <tr>
-          <td colspan="4" class="lc-label">ចំនួនថ្ងៃនៅសល់</td>
-          <td class="lc-num">{p_rem}</td>
-          <td class="lc-num">{s_rem}</td>
-          <td class="lc-num">{sl_rem}</td>
-        </tr>
-      </tbody>
-    </table>
+    <div class="leave-card-wrap">
+      <table class="leave-card">
+        <thead>
+          <tr>
+            <th colspan="2" class="lc-name">{emp_name}</th>
+            <th class="lc-gender">{emp_gender}</th>
+            <th class="lc-role">{emp_role}</th>
+            <th class="lc-p">ប្រចាំឆ្នាំ (P)</th>
+            <th class="lc-s">រយៈពេលខ្លី (S)</th>
+            <th class="lc-sl">ឈឺ (SL)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td colspan="4" class="lc-label">ចំនួនថ្ងៃបានប្រើប្រាស់</td>
+            <td class="lc-num">{p_used}</td>
+            <td class="lc-num">{s_used}</td>
+            <td class="lc-num">{sl_used}</td>
+          </tr>
+          <tr>
+            <td colspan="4" class="lc-label">ចំនួនថ្ងៃនៅសល់</td>
+            <td class="lc-num">{p_rem}</td>
+            <td class="lc-num">{s_rem}</td>
+            <td class="lc-num">{sl_rem}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
     """
     st.markdown(card_html, unsafe_allow_html=True)
 
 
 def render_sheet_like_table(raw_df: pd.DataFrame, max_height: str = "460px"):
-    """បង្ហាញតារាងទាំងអស់ជាទម្រង់ស្រដៀង Google Sheet"""
+    """បង្ហាញតារាងទាំងអស់ជាទម្រង់ស្រដៀង Google Sheet និងបង្រួមសម្រាប់ទូរស័ព្ទ"""
     top_row = raw_df.iloc[2].fillna("").astype(str).str.strip().tolist() if len(raw_df) > 2 else []
     sub_row = raw_df.iloc[3].fillna("").astype(str).str.strip().tolist() if len(raw_df) > 3 else []
     body_df = raw_df.iloc[4:].dropna(how="all").reset_index(drop=True)
@@ -210,16 +266,17 @@ def render_sheet_like_table(raw_df: pd.DataFrame, max_height: str = "460px"):
 
         if is_section_row:
             body_rows_html.append(
-                f'<tr class="gs-section-row"><td colspan="{num_cols}">{first_non_empty}</td></tr>'
+                f'<tr class="gs-section-row"><td colspan="{num_cols}">{to_khmer_num(first_non_empty)}</td></tr>'
             )
         else:
             tds = []
             for idx, val in enumerate(vals):
+                val_kh = to_khmer_num(val)
                 c_cls = col_classes.get(idx, "gs-col-compact")
                 if c_cls in ("gs-col-tiny", "gs-col-small", "gs-col-compact"):
-                    tds.append(f'<td class="{c_cls} gs-center">{val}</td>')
+                    tds.append(f'<td class="{c_cls} gs-center">{val_kh}</td>')
                 else:
-                    tds.append(f'<td class="{c_cls} gs-left">{val}</td>')
+                    tds.append(f'<td class="{c_cls} gs-left">{val_kh}</td>')
             body_rows_html.append(f'<tr>{"".join(tds)}</tr>')
 
     html = f"""
@@ -264,36 +321,36 @@ def render_sheet_like_table(raw_df: pd.DataFrame, max_height: str = "460px"):
         background-color: #f1f5f9;
       }}
       table.gs-table th.gs-col-tiny, table.gs-table td.gs-col-tiny {{
-        width: 40px;
-        min-width: 40px;
-        max-width: 46px;
+        width: 38px;
+        min-width: 38px;
+        max-width: 44px;
         padding-left: 2px;
         padding-right: 2px;
       }}
       table.gs-table th.gs-col-small, table.gs-table td.gs-col-small {{
-        width: 52px;
-        min-width: 52px;
-        max-width: 60px;
-        padding-left: 3px;
-        padding-right: 3px;
+        width: 48px;
+        min-width: 48px;
+        max-width: 56px;
+        padding-left: 2px;
+        padding-right: 2px;
       }}
       table.gs-table th.gs-col-compact, table.gs-table td.gs-col-compact {{
-        width: 64px;
-        min-width: 64px;
-        max-width: 78px;
-        padding-left: 3px;
-        padding-right: 3px;
+        width: 58px;
+        min-width: 58px;
+        max-width: 70px;
+        padding-left: 2px;
+        padding-right: 2px;
       }}
       table.gs-table th.gs-col-name, table.gs-table td.gs-col-name {{
-        width: 135px;
-        min-width: 135px;
-        max-width: 160px;
+        width: 125px;
+        min-width: 125px;
+        max-width: 150px;
         white-space: nowrap;
       }}
       table.gs-table th.gs-col-role, table.gs-table td.gs-col-role {{
-        width: 155px;
-        min-width: 155px;
-        max-width: 190px;
+        width: 145px;
+        min-width: 145px;
+        max-width: 175px;
         white-space: normal;
         line-height: 1.25;
       }}
@@ -311,8 +368,35 @@ def render_sheet_like_table(raw_df: pd.DataFrame, max_height: str = "460px"):
         font-weight: 700;
         color: #0f172a;
         text-align: left;
-        padding: 6px 10px;
+        padding: 6px 8px;
         white-space: normal;
+      }}
+
+      /* បង្រួមតារាងទាំងមូលលើទូរស័ព្ទ */
+      @media (max-width: 600px) {{
+        .gs-wrapper {{
+          font-size: 11px;
+        }}
+        table.gs-table th.gs-col-tiny, table.gs-table td.gs-col-tiny {{
+          width: 30px;
+          min-width: 30px;
+        }}
+        table.gs-table th.gs-col-small, table.gs-table td.gs-col-small {{
+          width: 40px;
+          min-width: 40px;
+        }}
+        table.gs-table th.gs-col-compact, table.gs-table td.gs-col-compact {{
+          width: 48px;
+          min-width: 48px;
+        }}
+        table.gs-table th.gs-col-name, table.gs-table td.gs-col-name {{
+          width: 105px;
+          min-width: 105px;
+        }}
+        table.gs-table th.gs-col-role, table.gs-table td.gs-col-role {{
+          width: 115px;
+          min-width: 115px;
+        }}
       }}
     </style>
     <div class="gs-wrapper">
@@ -328,6 +412,36 @@ def render_sheet_like_table(raw_df: pd.DataFrame, max_height: str = "460px"):
     </div>
     """
     st.markdown(html, unsafe_allow_html=True)
+
+
+# បង្រួម padding ទំព័រ Streamlit លើទូរស័ព្ទ និងកំណត់ selectbox ឱ្យល្មម
+st.markdown(
+    """
+    <style>
+      div[data-testid="stSelectbox"] {
+        max-width: 280px;
+      }
+      @media (max-width: 600px) {
+        .block-container {
+          padding-top: 2rem !important;
+          padding-left: 0.75rem !important;
+          padding-right: 0.75rem !important;
+        }
+        h1 {
+          font-size: 1.35rem !important;
+          line-height: 1.35 !important;
+        }
+        h2 {
+          font-size: 1.1rem !important;
+        }
+        div[data-testid="stSelectbox"] {
+          max-width: 100%;
+        }
+      }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 
 try:
@@ -364,16 +478,6 @@ try:
     name_col = next((c for c in ["គោត្តនាម-នាម", "ឈ្មោះ", "Name"] if c in df.columns), None)
 
     st.subheader("លទ្ធផលតាមឈ្មោះ")
-    st.markdown(
-        """
-        <style>
-          div[data-testid="stSelectbox"] {
-            max-width: 280px;
-          }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
 
     if name_col:
         names = (
@@ -407,7 +511,7 @@ try:
     st.divider()
 
     st.subheader("ទិន្នន័យទាំងអស់")
-    st.write(f"ចំនួនជួរដេកសរុប (Total rows): {len(df)}")
+    st.write(f"ចំនួនជួរដេកសរុប (Total rows): {to_khmer_num(str(len(df)))}")
     render_sheet_like_table(raw_df, max_height="500px")
 
 except Exception as e:
