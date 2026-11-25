@@ -6,13 +6,14 @@ st.title("តារាងបញ្ជីវត្តមានសរុបប្�
 csv_url = "https://docs.google.com/spreadsheets/d/1a_JSto3zLs_LGue6SfJyukmdPaw18XQ9eoWY4VeH_nE/export?format=csv&gid=2089000004"
 
 try:
-    df = pd.read_csv(csv_url, header=4)
+    df = pd.read_csv(csv_url, header=[5, 6])
     df = df.rename(
         columns={
             "Unnamed: 1": " ",
             "Unnamed: 2": "Name",
             "Unnamed: 3": "Gender",
             "Unnamed: 4": "Position",
+            "Unnamed: 5": "ច្បាប់ប្រចាំឆ្នាំ",
         }
     )
     
