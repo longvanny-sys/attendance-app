@@ -7,6 +7,7 @@ csv_url = "https://docs.google.com/spreadsheets/d/1a_JSto3zLs_LGue6SfJyukmdPaw18
 
 try:
     df = pd.read_csv(csv_url, header=9)
+    df = df.loc[:, ~df.columns.str.contains("^Unnamed: 0$")]
     df = df.rename(
         columns={
             "Unnamed: 1": "",
