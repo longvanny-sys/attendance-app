@@ -8,8 +8,19 @@ selected_name = st.selectbox(...)
 filtered_df = df[df['Name']== selected_name]
 	st.write(filtered.df)
 try:
-	df = pd.read_csv(csv_url)
-	st.dataframe(df)
+    df = pd.read_csv(csv_url)
+    st.subheader("ទិន្នន័យទាំងអស់")
+    st.dataframe(df)
+
+    if "Name" in df.columns:
+        names = df["Name"].dropna().unique().tolist()
+        selected_name = st.selectbox("ជ្រើសរើសឈ្មោះ", names)
+
+        filtered_df = df[df["Name"] == selected_name]
+        st.subheader("លទ្ធផលតាមឈ្មោះ")
+        st.dataframe(filtered_df)
+    else:
+        st.warning("រកមិនឃើញជួរឈរ 'Name' នៅក្នុង Sheet ទេ។")
 except Exception as e:
 	st.error(f"មានបញ្ហាទាញទិន្នន័យ៖ {e}")
 import streamlit as st
