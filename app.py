@@ -6,6 +6,8 @@ csv_url = sheet_url.replace("/edit?usp=sharing", "/export?format=csv")
 month = st.selectbox("ជ្រើសរើសឈ្មោះ", ["ឡុង វណ្ណនី", "ឈន ធារ៉ា", "ហែម ណារ៉ា"])
 try:
     df = pd.read_csv(csv_url)
+cell_value = df.loc[0, "Name"]
+st.write("តម្លៃក្នុង Cell:", cell_value)
     st.subheader("ទិន្នន័យទាំងអស់")
     st.dataframe(df)
 
@@ -15,6 +17,11 @@ try:
 
         filtered_df = df[df["Name"] == selected_name]
         st.subheader("លទ្ធផលតាមឈ្មោះ")
+		ame_value = df.loc[0, "Name"]
+# Or using .at (faster for single cell lookups)
+name_value = df.at[0, "Name"]
+	result = df.loc[df["Name"] == "ឡុង វណ្ណនី", "Status"].values[0]
+st.write("Status:", result)
         st.dataframe(filtered_df)
     else:
         st.warning("រកមិនឃើញជួរឈរ 'Name' នៅក្នុង Sheet ទេ។")
