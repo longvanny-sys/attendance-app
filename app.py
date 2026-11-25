@@ -8,18 +8,140 @@ st.title("តារាងបញ្ជីវត្តមានសរុបប្�
 csv_url = "https://docs.google.com/spreadsheets/d/1a_JSto3zLs_LGue6SfJyukmdPaw18XQ9eoWY4VeH_nE/export?format=csv&gid=2089000004"
 
 
+def render_employee_leave_card(row_series: pd.Series):
+    """បង្ហាញ Card សង្ខេប ៣ ជួរដូចរូបគំរូ"""
+    def clean_cell(idx, default=""):
+        if idx >= len(row_series):
+            return default
+        val = row_series.iloc[idx]
+        if pd.isna(val):
+            return default
+        s = str(val).strip()
+        return default if s == "" or s.lower() == "nan" else s
+
+    # តាមលំដាប់ Column ក្នុង Sheet:
+    # 0: ល.ស, 1: ល.រ, 2: គោត្តនាម-នាម, 3: ភេទ, 4: ឋានៈ
+    # 5: P បានប្រើ, 6: P នៅសល់, 7: S បានប្រើ, 8: S នៅសល់, 9: SL បានប្រើ, 10: SL នៅសល់
+    emp_name = clean_cell(2, "-")
+    emp_gender = clean_cell(3, "-")
+    emp_role = clean_cell(4, "-")
+
+    p_used = clean_cell(5, "00")
+    p_rem = clean_cell(6, "00")
+    s_used = clean_cell(7, "00")
+    s_rem = clean_cell(8, "00")
+    sl_used = clean_cell(9, "00")
+    sl_rem = clean_cell(10, "00")
+
+    card_html = f"""
+    <style>
+      table.leave-card {{
+        border-collapse: collapse;
+        width: 100%;
+        max-width: 820px;
+        margin-top: 8px;
+        margin-bottom: 12px;
+        font-family: "Khmer OS Battambang", "Noto Sans Khmer", Arial, sans-serif;
+        font-size: 15px;
+        border: 2px solid #1f2328;
+        background: #ffffff;
+      }}
+      table.leave-card th, table.leave-card td {{
+        border: 1px solid #333333;
+        padding: 7px 12px;
+        text-align: center;
+        vertical-align: middle;
+      }}
+      .lc-name {{
+        background-color: #ffff00 !important;
+        color: #4a148c !important;
+        font-weight: 700;
+        font-size: 16px;
+        min-width: 150px;
+      }}
+      .lc-gender {{
+        background-color: #f8cba6 !important;
+        color: #1f2328 !important;
+        font-weight: 700;
+        width: 75px;
+      }}
+      .lc-role {{
+        background-color: #f8cba6 !important;
+        color: #1f2328 !important;
+        font-weight: 700;
+        min-width: 180px;
+      }}
+      .lc-p {{
+        background-color: #009944 !important;
+        color: #000000 !important;
+        font-weight: 700;
+        min-width: 120px;
+      }}
+      .lc-s {{
+        background-color: #ffcc00 !important;
+        color: #000000 !important;
+        font-weight: 700;
+        min-width: 120px;
+      }}
+      .lc-sl {{
+        background-color: #e67300 !important;
+        color: #000000 !important;
+        font-weight: 700;
+        min-width: 120px;
+      }}
+      .lc-label {{
+        background-color: #ffffff !important;
+        color: #111111 !important;
+        font-weight: 700;
+        text-align: right !important;
+        padding-right: 18px !important;
+      }}
+      .lc-num {{
+        background-color: #ffffff !important;
+        color: #4a2c82 !important;
+        font-weight: 700;
+      }}
+    </style>
+    <table class="leave-card">
+      <thead>
+        <tr>
+          <th colspan="2" class="lc-name">{emp_name}</th>
+          <th class="lc-gender">{emp_gender}</th>
+          <th class="lc-role">{emp_role}</th>
+          <th class="lc-p">ប្រចាំឆ្នាំ (P)</th>
+          <th class="lc-s">រយៈពេលខ្លី (S)</th>
+          <th class="lc-sl">ឈឺ (SL)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td colspan="4" class="lc-label">ចំនួនថ្ងៃបានប្រើប្រាស់</td>
+          <td class="lc-num">{p_used}</td>
+          <td class="lc-num">{s_used}</td>
+          <td class="lc-num">{sl_used}</td>
+        </tr>
+        <tr>
+          <td colspan="4" class="lc-label">ចំនួនថ្ងៃនៅសល់</td>
+          <td class="lc-num">{p_rem}</td>
+          <td class="lc-num">{s_rem}</td>
+          <td class="lc-num">{sl_rem}</td>
+        </tr>
+      </tbody>
+    </table>
+    """
+    st.markdown(card_html, unsafe_allow_html=True)
+
+
 def render_sheet_like_table(raw_df: pd.DataFrame, max_height: str = "460px"):
-    """បង្ហាញតារាងជាទម្រង់ស្រដៀង Google Sheet ដោយបង្រួម column ធំៗឱ្យតូចទាំងអស់"""
+    """បង្ហាញតារាងទាំងអស់ជាទម្រង់ស្រដៀង Google Sheet"""
     top_row = raw_df.iloc[2].fillna("").astype(str).str.strip().tolist() if len(raw_df) > 2 else []
     sub_row = raw_df.iloc[3].fillna("").astype(str).str.strip().tolist() if len(raw_df) > 3 else []
-
     body_df = raw_df.iloc[4:].dropna(how="all").reset_index(drop=True)
     num_cols = body_df.shape[1]
 
     top_row = (top_row + [""] * num_cols)[:num_cols]
     sub_row = (sub_row + [""] * num_cols)[:num_cols]
 
-    # កំណត់ប្រភេទទទឹងតាម column index ឬឈ្មោះ column
     col_classes = {}
     for idx in range(num_cols):
         t_clean = "" if "Unnamed" in top_row[idx] else top_row[idx]
@@ -27,17 +149,17 @@ def render_sheet_like_table(raw_df: pd.DataFrame, max_height: str = "460px"):
         combined = f"{t_clean} {b_clean}".strip()
 
         if "ល.រ" in combined or idx == 1:
-            col_classes[idx] = "gs-col-tiny"       # ល.រ (តូចបំផុត)
+            col_classes[idx] = "gs-col-tiny"
         elif "ល.ស" in combined or idx == 0:
-            col_classes[idx] = "gs-col-tiny"       # ល.ស (តូចបំផុត)
+            col_classes[idx] = "gs-col-tiny"
         elif "ភេទ" in combined or idx == 3:
-            col_classes[idx] = "gs-col-small"      # ភេទ
+            col_classes[idx] = "gs-col-small"
         elif "គោត្តនាម" in combined or idx == 2:
-            col_classes[idx] = "gs-col-name"       # ឈ្មោះ (ទទឹងល្មមអានច្បាស់)
+            col_classes[idx] = "gs-col-name"
         elif "ឋានៈ" in combined or idx == 4:
-            col_classes[idx] = "gs-col-role"       # ឋានៈ (ចុះបន្ទាត់បាន មិនរីកធំពេក)
+            col_classes[idx] = "gs-col-role"
         else:
-            col_classes[idx] = "gs-col-compact"    # ជួរឈរច្បាប់ និងលេខផ្សេងៗ (បង្រួមឱ្យតូច)
+            col_classes[idx] = "gs-col-compact"
 
     th_row1_html = []
     th_row2_html = []
@@ -60,9 +182,7 @@ def render_sheet_like_table(raw_df: pd.DataFrame, max_height: str = "460px"):
                     break
 
             if span > 1:
-                # ប្រើ class តូចសម្រាប់ក្រុមធំដែលមានកូនច្រើន ដើម្បីកុំឱ្យរីកធំពេក
-                group_cls = "gs-group-compact"
-                th_row1_html.append(f'<th colspan="{span}" class="{group_cls}">{t_val}</th>')
+                th_row1_html.append(f'<th colspan="{span}" class="gs-group-compact">{t_val}</th>')
                 for k in range(i, i + span):
                     sub_label = "" if "Unnamed" in sub_row[k] else sub_row[k]
                     c_cls = col_classes.get(k, "gs-col-compact")
@@ -143,7 +263,6 @@ def render_sheet_like_table(raw_df: pd.DataFrame, max_height: str = "460px"):
         top: 30px;
         background-color: #f1f5f9;
       }}
-      /* ទទឹងតូចបំផុតសម្រាប់ ល.ស និង ល.រ */
       table.gs-table th.gs-col-tiny, table.gs-table td.gs-col-tiny {{
         width: 40px;
         min-width: 40px;
@@ -151,7 +270,6 @@ def render_sheet_like_table(raw_df: pd.DataFrame, max_height: str = "460px"):
         padding-left: 2px;
         padding-right: 2px;
       }}
-      /* ទទឹងតូចសម្រាប់ ភេទ */
       table.gs-table th.gs-col-small, table.gs-table td.gs-col-small {{
         width: 52px;
         min-width: 52px;
@@ -159,22 +277,19 @@ def render_sheet_like_table(raw_df: pd.DataFrame, max_height: str = "460px"):
         padding-left: 3px;
         padding-right: 3px;
       }}
-      /* ទទឹងបង្រួមសម្រាប់ជួរឈរច្បាប់ និងលេខផ្សេងៗ */
       table.gs-table th.gs-col-compact, table.gs-table td.gs-col-compact {{
         width: 64px;
-        min-width: 90px;
+        min-width: 64px;
         max-width: 78px;
         padding-left: 3px;
         padding-right: 3px;
       }}
-      /* ទទឹងសមរម្យសម្រាប់ឈ្មោះបុគ្គលិក */
       table.gs-table th.gs-col-name, table.gs-table td.gs-col-name {{
         width: 135px;
         min-width: 135px;
         max-width: 160px;
         white-space: nowrap;
       }}
-      /* ទទឹងសមរម្យសម្រាប់ឋានៈ (អនុញ្ញាតឱ្យចុះបន្ទាត់បាន មិនរីកធំពេក) */
       table.gs-table th.gs-col-role, table.gs-table td.gs-col-role {{
         width: 155px;
         min-width: 155px;
@@ -247,12 +362,8 @@ try:
     df = df.dropna(how="all").reset_index(drop=True)
 
     name_col = next((c for c in ["គោត្តនាម-នាម", "ឈ្មោះ", "Name"] if c in df.columns), None)
-    role_col = next((c for c in ["ឋានៈ", "តួនាទី", "Status"] if c in df.columns), None)
-    # ផ្នែកទី ១៖ លទ្ធផលតាមឈ្មោះ (នៅខាងលើ)
-    # ==========================================
-    st.subheader("លទ្ធផលតាមឈ្មោះ")
 
-    # បង្រួមទទឹង selectbox «ជ្រើសរើសឈ្មោះ» ឱ្យខ្លីល្មម (ប្រើ column 1 ក្នុងចំណោម 3 ផ្នែក)
+    st.subheader("លទ្ធផលតាមឈ្មោះ")
     st.markdown(
         """
         <style>
@@ -265,45 +376,33 @@ try:
     )
 
     if name_col:
-      names = (
-          df[name_col]
-          .dropna()
-          .astype(str)
-          .str.strip()
-          .replace("", pd.NA)
-          .dropna()
-          .unique()
-          .tolist()
-      )
-      names = [
-          n
-          for n in names
-          if not n.startswith(("I.", "II.", "III.", "IV.", "V."))
-      ]
+        names = (
+            df[name_col]
+            .dropna()
+            .astype(str)
+            .str.strip()
+            .replace("", pd.NA)
+            .dropna()
+            .unique()
+            .tolist()
+        )
+        names = [n for n in names if not n.startswith(("I.", "II.", "III.", "IV.", "V."))]
 
-      if names:
-        col_pick, _ = st.columns([1.2, 2.8])
-        with col_pick:
-          selected_name = st.selectbox("ជ្រើសរើសឈ្មោះ", names)
+        if names:
+            col_pick, _ = st.columns([1.2, 2.8])
+            with col_pick:
+                selected_name = st.selectbox("ជ្រើសរើសឈ្មោះ", names)
 
-        filtered_df = df[df[name_col].astype(str).str.strip() == selected_name]
+            matched_raw_rows = raw_df[
+                raw_df.apply(lambda r: selected_name in [str(x).strip() for x in r.values], axis=1)
+            ]
 
-        if role_col and not filtered_df.empty:
-          st.write(f"{role_col}:", filtered_df[role_col].iloc[0])
-
-        if not filtered_df.empty:
-          single_raw = pd.concat(
-              [
-                  raw_df.iloc[:4],
-                  raw_df[raw_df.isin([selected_name]).any(axis=1)],
-              ],
-              ignore_index=True,
-          )
-          render_sheet_like_table(single_raw, max_height="180px")
-      else:
-        st.info("មិនមានឈ្មោះបុគ្គលិកសម្រាប់បង្ហាញទេ។")
+            if not matched_raw_rows.empty:
+                render_employee_leave_card(matched_raw_rows.iloc[0])
+        else:
+            st.info("មិនមានឈ្មោះបុគ្គលិកសម្រាប់បង្ហាញទេ។")
     else:
-      st.warning("រកមិនឃើញជួរឈរឈ្មោះនៅក្នុង Sheet ទេ។")
+        st.warning("រកមិនឃើញជួរឈរឈ្មោះនៅក្នុង Sheet ទេ។")
 
     st.divider()
 
