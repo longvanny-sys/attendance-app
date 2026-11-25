@@ -10,14 +10,14 @@ try:
     df = df.rename(
         columns={
             "Unnamed: 1": "",
-            "Unnamed: 2": "Name",
-            "Unnamed: 3": "Gender",
-            "Unnamed: 4": "Position",
-            "Unnamed: 5": "ច្បាប់ប្រចាំឆ្នាំ(P)",
+            "Unnamed: 2": "ឈ្មោះ",
+            "Unnamed: 3": "ភេទ",
+            "Unnamed: 4": "តួនាទី",
+            "Unnamed: 5": "",
             "Unnamed: 6": "",
-            "Unnamed: 7": "ច្បាប់រយះពេលខ្លី(S)",
+            "Unnamed: 7": "",
             "Unnamed: 8": "",
-            "Unnamed: 9": "ច្បាប់ឈឺ(SL)",
+            "Unnamed: 9": "",
             "Unnamed: 10": "",
         }
     )
