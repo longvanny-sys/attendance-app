@@ -2,13 +2,10 @@ import pandas as pd
 import streamlit as st
 
 st.title("វត្តមាន")
-
 sheet_url ="https://docs.google.com/spreadsheets/d/1a_JSto3zLs_LGue6SfJyukmdPaw18XQ9eoWY4VeH_nE/edit?usp=sharing"
-csv_url = sheet_url.replace("/edit?usp=sharing", "/export?format=csv")
-
+csv_url = "https://docs.google.com/spreadsheets/d/1a_JSto3zLs_LGue6SfJyukmdPaw18XQ9eoWY4VeH_nE/export?format=csv&gid=2089004")
 try:
     df = pd.read_csv(csv_url)
-
     st.subheader("ទិន្នន័យទាំងអស់")
     st.dataframe(df)
 
