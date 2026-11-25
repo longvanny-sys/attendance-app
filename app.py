@@ -12,8 +12,9 @@ cell_value = df.loc[0, "Name"]
 st.write("តម្លៃក្នុង Cell:", cell_value)
     st.subheader("ទិន្នន័យទាំងអស់")
     st.dataframe(df)
-
-    if "Name" in df.columns:
+if not df.empty:
+	st.write(តម្លៃ Cell ដំបូង:", df.iloc[0, 0])
+if "Name" in df.columns:
         names = df["Name"].dropna().unique().tolist()
         selected_name = st.selectbox("ជ្រើសរើសឈ្មោះ", names)
 
