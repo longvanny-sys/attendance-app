@@ -9,6 +9,7 @@ try:
     df = pd.read_csv(csv_url, header=4)
     df = df.rename(
         columns={
+            "Unnamed: 1": " ",
             "Unnamed: 2": "Name",
             "Unnamed: 3": "Gender",
             "Unnamed: 4": "Position",
