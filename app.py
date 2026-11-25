@@ -23,7 +23,8 @@ try:
     )
     
     st.subheader("ទិន្នន័យទាំងអស់")
-    st.dataframe(df)
+    st.write(f"ចំនួនជួរដេកសរុប (Total rows): {len(df)}")
+    st.dataframe(df, use_container_width=True)
 
     if not df.empty:
         st.write("តម្លៃ Cell ដំបូង:", df.iloc[0, 0])
