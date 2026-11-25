@@ -1,12 +1,17 @@
 import pandas as pd
 import streamlit as st
-
+df = pd.read_csv(url)
+df = df.rename(columns={
+    'Unnamed: 2': 'Name',
+    'Unnamed: 3': 'Gender',
+    'Unnamed: 4': 'Position'
+})
 st.title("តារាងបញ្ជីវត្តមានសរុបប្រចាំឆ្នាំ២០២៦ សាខា ប.ស.ស. ខេត្តពោធិ៍សាត់គិតចាប់ពីថ្ងៃទី១៣ ខែមេសា ឆ្នាំ២០២៦ រហូតដល់ថ្ងៃទី១២ ខែមេសា ឆ្នាំ២០២៧")
 
 csv_url = "https://docs.google.com/spreadsheets/d/1a_JSto3zLs_LGue6SfJyukmdPaw18XQ9eoWY4VeH_nE/export?format=csv&gid=2089000004"
 
 try:
-    df = pd.read_csv(csv_url)
+    df = pd.read_csv(url, header=4)
     
     st.subheader("ទិន្នន័យទាំងអស់")
     st.dataframe(df)
