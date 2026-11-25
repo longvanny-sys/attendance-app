@@ -19,8 +19,7 @@ st.write("តម្លៃក្នុង Cell:", cell_value)
 
         filtered_df = df[df["Name"] == selected_name]
         st.subheader("លទ្ធផលតាមឈ្មោះ")
-		ame_value = df.loc[0, "Name"]
-# Or using .at (faster for single cell lookups)
+		name_value = df.loc[0, "Name"]
 name_value = df.at[0, "Name"]
 	result = df.loc[df["Name"] == "ឡុង វណ្ណនី", "Status"].values[0]
 st.write("Status:", result)
@@ -34,6 +33,4 @@ option = st.selectbox(
     "How would you like to be contacted?",
     ("Email", "Home phone", "Mobile phone"),
 )
-
 st.write("You selected:", option)
-
