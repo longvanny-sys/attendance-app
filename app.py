@@ -4,9 +4,6 @@ st.title("វត្តមាន")
 sheet_url = "https://docs.google.com/spreadsheets/d/1a_JSto3zLs_LGue6SfJyukmdPaw18XQ9eoWY4VeH_nE/edit?usp=sharing"
 csv_url = sheet_url.replace("/edit?usp=sharing", "/export?format=csv")
 month = st.selectbox("ជ្រើសរើសឈ្មោះ", ["ឡុង វណ្ណនី", "ឈន ធារ៉ា", "ហែម ណារ៉ា"])
-selected_name = st.selectbox(...)
-filtered_df = df[df['Name']== selected_name]
-	st.write(filtered.df)
 try:
     df = pd.read_csv(csv_url)
     st.subheader("ទិន្នន័យទាំងអស់")
