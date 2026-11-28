@@ -5,7 +5,7 @@ import streamlit as st
 
 st.set_page_config(page_title="បញ្ជីវត្តមានសរុបប្រចាំឆ្នាំ២០២៦", layout="wide")
 
-st.title("តារាងបញ្ជីវត្តមានសរុបប្រចាំឆ្នាំ២០២៦ សាខា ប.ស.ស. ខេត្តពោធិ៍សាត់")
+st.title("ទិន្នន័យការប្រើប្រាស់ច្បាប់ឈប់សម្រាក")
 
 SPREADSHEET_ID = "1a_JSto3zLs_LGue6SfJyukmdPaw18XQ9eoWY4VeH_nE"
 SUMMARY_GID = "2089000004"
